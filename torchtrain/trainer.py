@@ -6,9 +6,18 @@ import torch
 import torch.nn as nn
 from torch import autograd
 import torch.nn.functional as F
-from torchvision.utils import save_image
 
-from deepy.util import AverageMeter, gradshow
+
+class AverageMeter(object):
+    def __init__(self):
+        self.sum = 0
+        self.count = 0
+        self.average = None
+
+    def update(self, value, number=1):
+        self.sum += value * number
+        self.count += number
+        self.average = self.sum / self.count
 
 
 class Trainer(metaclass = ABCMeta):
@@ -40,9 +49,6 @@ class ClassifierTrainer(Trainer):
             inputs = inputs.to(self.device)
             labels = labels.to(self.device)
 
-            #if i % 500 == 500-1:
-            #    inputs.requires_grad_(requires_grad=True)
-
             outputs = self.net(inputs)
             loss = self.criterion(outputs, labels)
 
@@ -54,10 +60,10 @@ class ClassifierTrainer(Trainer):
 
         return loss_meter.average
 
-    def eval(self, dataloader):
+    def eval(self, dataloader, num_classes):
         self.net.eval()
-        correct = 0
-        total = 0
+        class_correct = list(0. for i in range(num_classes))
+        class_total = list(0. for i in range(num_classes))
         with torch.no_grad():
             for inputs, labels in dataloader:
                 inputs = inputs.to(self.device)
@@ -65,32 +71,19 @@ class ClassifierTrainer(Trainer):
 
                 outputs = self.net(inputs)
                 _, predicted = torch.max(outputs.data, 1)
+                c = (predicted == labels)
+
+                for i in range(len(labels)):
+                    label = labels[i]
+                    class_correct[label] += c[i].item()
+                    class_total[label] += 1
+
                 total += labels.size(0)
                 correct += (predicted == labels).sum().item()
-        return correct / total
 
-    def visualize_grad(self, dataloader):
-        self.net.train()
-        inputs, labels = next(iter(dataloader))
-        inputs = inputs.to(self.device)
-        labels = labels.to(self.device)
-
-        features = list(self.net.net)
-        features = nn.ModuleList(features).eval()
-        results = []
-        x = inputs
-        for ii, model in enumerate(features):
-            x = model(x)
-            x.retain_grad()
-            results.append(x)
-
-        loss = self.criterion(x.view(inputs.size(0), -1), labels)
-        # loss.backward()
-        results[3].backward(torch.ones_like(results[3]))
-
-        for x in results:
-            if x.grad is not None:
-                gradshow(x.grad.cpu().detach())
+        class_accuracy = class_correct[i] / class_total[i]
+        total_accuracy = sum(class_correct) / sum(class_total)
+        return total_accuracy, class_accuracy
 
 
 class RegressorTrainer(Trainer):
