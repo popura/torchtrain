@@ -1,5 +1,5 @@
 # torchdataset
-This is a package to handle various kinds of data in a unified way with Pytorch.
+This is a package to train DNN models with PyTorch.
 
 # Requirements
 - Python 3.7 or later
@@ -13,5 +13,5 @@ pip install torchdataset
 
 # Usage
 ```
-import torchdataset
+import torchtrain
 ```
