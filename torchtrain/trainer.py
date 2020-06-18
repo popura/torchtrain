@@ -62,6 +62,8 @@ class ClassifierTrainer(Trainer):
 
     def eval(self, dataloader, num_classes):
         self.net.eval()
+        total = 0
+        correct = 0
         class_correct = list(0. for i in range(num_classes))
         class_total = list(0. for i in range(num_classes))
         with torch.no_grad():
