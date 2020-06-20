@@ -1,3 +1,4 @@
+import time
 import os
 from abc import ABCMeta
 from abc import abstractmethod
@@ -6,6 +7,7 @@ import torch
 import torch.nn as nn
 from torch import autograd
 import torch.nn.functional as F
+
 
 
 class AverageMeter(object):
@@ -20,10 +22,68 @@ class AverageMeter(object):
         self.average = self.sum / self.count
 
 
-class Trainer(metaclass = ABCMeta):
-    @abstractmethod
-    def train(self):
-        pass
+class Trainer(object):
+    def __init__(self,
+                 net,
+                 optimizer,
+                 criterion,
+                 dataloader,
+                 scheduler=None,
+                 init_epoch=0,
+                 device='cpu'):
+        self.net = net
+        self.optimizer = optimizer
+        self.criterion = criterion
+        self.dataloader = dataloader
+        self.scheduler = scheduler
+        self.device = device
+        self.epoch = init_epoch
+
+    def train(self, epochs, valloader=None):
+        start_time = time.time()
+        start_epoch = self.epoch
+        costs = []
+        print('-----Training Started-----')
+        for epoch in range(start_epoch, epochs):  # loop over the dataset multiple times
+            loss = self.step()
+            elapsed_time = time.time() - start_time
+            ave_required_time = elapsed_time / (epoch + 1)
+            finish_time = ave_required_time * (epochs - (epoch + 1))
+            format_str = 'Epoch: {:03d}/{:03d}'.format(epoch+1, epochs)
+            format_str + ' | '
+            format_str += 'Loss: {:.4f}'.format(loss)
+            format_str + ' | '
+            format_str += 'Time: {:02d} hour {:02.2f} min'.format(elapsed_time/60/60, elapsed_time/60)
+            format_str + ' | '
+            format_str += 'Finish after: {:02d} hour {:02.2f} min'.format(finish_time/60/60, finish_time/60)
+            print(format_str)
+            costs.append(loss)
+        print('Total Training Time: {:02d} hour {:02.2f} min'.format(elapsed_time/60))
+        print('-----Training Finished-----')
+
+        return self.net
+
+    def step(self):
+        self.net.train()
+        loss_meter = AverageMeter()
+        for inputs, labels in self.dataloader:
+            inputs = inputs.to(self.device)
+            labels = labels.to(self.device)
+
+            outputs = self.net(inputs)
+            loss = self.criterion(outputs, labels)
+
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+            loss_meter.update(loss.item(), number=inputs.size(0))
+
+        if self.scheduler is not None:
+            scheduler.step()
+        self.epoch += 1
+
+        return loss_meter.average
 
 
 class ClassifierTrainer(Trainer):
@@ -332,4 +392,53 @@ class VAETrainer(Trainer):
 
             loss_meter.update(loss.item(), number=real.size(0))
 
+        return loss_meter.average
+
+
+class AutoEncoderTrainer(torchtrain.trainer.RegressorTrainer):
+    def __init__(self,
+                 net,
+                 optimizer,
+                 criterion,
+                 dataloader,
+                 device):
+        super(AutoEncoderTrainer, self).__init__(net, optimizer, criterion,
+                                                 dataloader, device)
+
+    def train(self):
+        self.net.train()
+
+        loss_meter = torchtrain.trainer.AverageMeter()
+
+        for inputs, *_ in self.dataloader:
+            targets = inputs.clone().detach()
+            inputs = inputs.to(self.device)
+            targets = targets.to(self.device)
+
+            outputs = self.net(inputs)
+            loss = self.criterion(outputs, targets)
+
+            self.optimizer.zero_grad()
+            loss.backward()
+            self.optimizer.step()
+
+            loss_meter.update(loss.item(), number=inputs.size(0))
+
+        return loss_meter.average
+
+    def eval(self, dataloader):
+        self.net.eval()
+        
+        loss_meter = torchtrain.trainer.AverageMeter()
+
+        with torch.no_grad():
+            for inputs, *_ in dataloader:
+                targets = inputs.clone().detach()
+                inputs = inputs.to(self.device)
+                targets = targets.to(self.device)
+
+                outputs = self.net(inputs)
+                loss = self.criterion(outputs, targets)
+                loss_meter.update(loss.item(), number=inputs.size(0))
+            
         return loss_meter.average
