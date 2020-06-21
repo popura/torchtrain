@@ -100,26 +100,6 @@ class ClassifierTrainer(Trainer):
         self.dataloader = dataloader
         self.device = device
 
-    def train(self):
-        self.net.train()
-
-        loss_meter = AverageMeter()
-
-        for inputs, labels in self.dataloader:
-            inputs = inputs.to(self.device)
-            labels = labels.to(self.device)
-
-            outputs = self.net(inputs)
-            loss = self.criterion(outputs, labels)
-
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
-
-            loss_meter.update(loss.item(), number=inputs.size(0))
-
-        return loss_meter.average
-
     def eval(self, dataloader, num_classes):
         self.net.eval()
         class_correct = list(0. for i in range(num_classes))
@@ -156,26 +136,6 @@ class RegressorTrainer(Trainer):
         self.criterion = criterion
         self.dataloader = dataloader
         self.device = device
-
-    def train(self):
-        self.net.train()
-
-        loss_meter = AverageMeter()
-
-        for inputs, targets in self.dataloader:
-            inputs = inputs.to(self.device)
-            targets = targets.to(self.device)
-
-            outputs = self.net(inputs)
-            loss = self.criterion(outputs, targets)
-
-            self.optimizer.zero_grad()
-            loss.backward()
-            self.optimizer.step()
-
-            loss_meter.update(loss.item(), number=inputs.size(0))
-
-        return loss_meter.average
 
     def eval(self, dataloader):
         self.net.eval()
@@ -214,7 +174,7 @@ class GANTrainer(Trainer):
         self.latent_dim = latent_dim
         self.dsc_train_ratio = dsc_train_ratio
 
-    def train(self):
+    def step(self):
         self.net_g.train()
         self.net_d.train()
 
@@ -289,7 +249,7 @@ class WGANgpTrainer(GANTrainer):
                                             latent_dim, dsc_train_ratio)
         self.c = c
 
-    def train(self):
+    def step(self):
         self.net_g.train()
 
         loss_g_meter = AverageMeter()
@@ -405,7 +365,7 @@ class AutoEncoderTrainer(torchtrain.trainer.RegressorTrainer):
         super(AutoEncoderTrainer, self).__init__(net, optimizer, criterion,
                                                  dataloader, device)
 
-    def train(self):
+    def step(self):
         self.net.train()
 
         loss_meter = torchtrain.trainer.AverageMeter()
